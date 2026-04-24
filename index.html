@@ -222,6 +222,16 @@
     margin-bottom: 16px;
     display: none;
   }
+  .info-notice {
+    background: rgba(184,137,42,0.08);
+    border-left: 3px solid var(--gold);
+    color: rgba(15,12,7,0.75);
+    padding: 10px 13px;
+    font-size: 0.8rem;
+    line-height: 1.4;
+    margin-bottom: 14px;
+  }
+  .info-notice strong { color: var(--ink); }
 
   /* ── RESULTS ── */
   .results-header {
@@ -489,6 +499,7 @@
   <!-- RESULTS -->
   <div id="results-section" style="display:none;">
     <div class="results-header" id="results-header">Results</div>
+    <div class="info-notice" id="blood-notice" style="display:none;"></div>
     <div class="cards-grid" id="cards-grid"></div>
 
     <div class="alt-section" id="alt-section" style="display:none;">
@@ -810,8 +821,13 @@ function scoreStallion(s, mareDisc, mBlood, mTraits) {
     });
   });
   compat = Math.min(compat, sBlood.length + mBlood.length);
-  if (sBlood.length === 0 || mBlood.length === 0) bloodPts = 15;
-  else bloodPts = Math.max(0, Math.min(30, compat * 8 - conflict * 10));
+  if (sBlood.length === 0 || mBlood.length === 0) {
+    bloodPts = 15;                                  // no bloodlines provided → neutral
+  } else if (compat === 0 && conflict === 0) {
+    bloodPts = 15;                                  // bloodlines present but no known relationship → neutral (unknown ≠ bad)
+  } else {
+    bloodPts = Math.max(0, Math.min(30, compat * 8 - conflict * 10));
+  }
 
   // Traits (30)
   const sTraits = (s.traits||[]).map(t=>t.toLowerCase());
@@ -833,7 +849,7 @@ function fmtFee(fee) {
   return { text: '$' + fee.toLocaleString(), cls: '' };
 }
 
-function fmtEarnings(s, disc) {
+function fmtEarnings(s) {
   if (s.lifetime_earnings > 0) return '$' + s.lifetime_earnings.toLocaleString() + ' LTE';
   return null;
 }
@@ -934,12 +950,14 @@ function buildCard(s, score, explanation, type) {
         ${s.performance_summary ? `<div class="stat-item">${s.performance_summary}</div>` : ''}
         ${s.enrollments?.length ? `<div class="stat-item"><strong>Programs:</strong> ${s.enrollments.slice(0,2).join(', ')}</div>` : ''}
       </div>
-      <div class="explanation">${explanation}</div>
+      <div class="explanation"></div>
     </div>
     <div class="card-fee">
       <span class="fee-label">2026 Stud Fee</span>
       <span class="fee-amount ${fee.cls}">${fee.text}</span>
     </div>`;
+  // AI-returned text goes through textContent, not innerHTML — no injection from model output or mare notes
+  card.querySelector('.explanation').textContent = explanation;
   return card;
 }
 
@@ -980,6 +998,7 @@ async function runMatch() {
   const altSection = document.getElementById('alt-section');
   const altGrid = document.getElementById('alt-grid');
   const altLoading = document.getElementById('alt-loading');
+  const bloodNotice = document.getElementById('blood-notice');
 
   const mareDisc = document.getElementById('mare-disc').value;
   const mareBloodRaw = document.getElementById('mare-blood').value;
@@ -1000,6 +1019,7 @@ async function runMatch() {
   altLoading.style.display = 'flex';
   section.style.display = 'none';
   empty.style.display = 'none';
+  bloodNotice.style.display = 'none';
 
   let mare, inDisc;
 
@@ -1046,6 +1066,22 @@ async function runMatch() {
     document.getElementById('results-header').textContent =
       `Top Matches — ${mareDisc.charAt(0).toUpperCase()+mareDisc.slice(1)} Mare`;
     section.style.display = 'block';
+
+    // Show inline notice if user typed bloodlines but none are in our database.
+    // Known = appears as a COMPAT key OR in any stallion's bloodlines list.
+    if (mBlood.length > 0) {
+      const knownKeys = new Set(Object.keys(COMPAT));
+      STALLIONS.forEach(st => (st.bloodlines||[]).forEach(b => knownKeys.add(b.toLowerCase())));
+      const recognized = mBlood.filter(b => knownKeys.has(b));
+      if (recognized.length === 0) {
+        bloodNotice.innerHTML =
+          `<strong>Note:</strong> The bloodline${mBlood.length>1?'s':''} you entered ` +
+          `(${mBlood.map(b=>b.replace(/\b\w/g,c=>c.toUpperCase())).join(', ')}) ` +
+          `${mBlood.length>1?'are':'is'} not in our breeding-compatibility database. ` +
+          `Scores below reflect discipline and trait alignment only.`;
+        bloodNotice.style.display = 'block';
+      }
+    }
 
   } catch (err) {
     errBar.textContent = '⚠ ' + (err.message || 'Error running match. Try again.');
