@@ -549,6 +549,171 @@
     text-transform: uppercase;
   }
 
+  /* ── FEE DISCLAIMER ── */
+  .fee-disclaimer {
+    background: rgba(184,137,42,0.06);
+    border: 1px solid rgba(184,137,42,0.25);
+    border-left: 3px solid var(--gold);
+    color: rgba(15,12,7,0.78);
+    padding: 10px 13px;
+    font-size: 0.78rem;
+    line-height: 1.5;
+    margin-bottom: 14px;
+  }
+  .fee-disclaimer strong { color: var(--ink); }
+
+  /* ── SCORING METHODOLOGY ── */
+  .scoring-methodology {
+    margin-top: 30px;
+    border: 1px solid rgba(242,234,216,0.22);
+    background: rgba(242,234,216,0.04);
+  }
+  .scoring-methodology > summary {
+    list-style: none;
+    cursor: pointer;
+    padding: 12px 16px;
+    font-family: 'Menlo', 'Courier New', Courier, monospace;
+    font-size: 0.78rem;
+    letter-spacing: 1.5px;
+    text-transform: uppercase;
+    color: rgba(242,234,216,0.75);
+    user-select: none;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 10px;
+  }
+  .scoring-methodology > summary::-webkit-details-marker { display: none; }
+  .scoring-methodology > summary::after {
+    content: '+';
+    font-size: 1.1rem;
+    color: var(--gold);
+    transition: transform 0.2s;
+  }
+  .scoring-methodology[open] > summary::after { content: '−'; }
+  .scoring-methodology > summary:focus-visible { outline: 2px solid var(--gold); outline-offset: 2px; }
+  @media (hover: hover) {
+    .scoring-methodology > summary:hover { color: var(--gold2); }
+  }
+  .methodology-body {
+    padding: 4px 18px 18px;
+    color: rgba(242,234,216,0.78);
+    font-size: 0.85rem;
+    line-height: 1.6;
+    border-top: 1px solid rgba(242,234,216,0.12);
+  }
+  .methodology-body p { margin-bottom: 10px; margin-top: 12px; }
+  .methodology-body ul { margin: 10px 0 14px 18px; }
+  .methodology-body li { margin-bottom: 6px; }
+  .methodology-body strong { color: var(--gold2); }
+  .methodology-fine {
+    font-size: 0.75rem;
+    color: rgba(242,234,216,0.55);
+    font-style: italic;
+    padding-top: 8px;
+    border-top: 1px solid rgba(242,234,216,0.1);
+  }
+
+  /* ── FOOTER ── */
+  .site-footer {
+    background: var(--ink);
+    color: rgba(242,234,216,0.7);
+    border-top: 3px solid var(--gold);
+    margin-top: 40px;
+    padding: 24px 20px 16px;
+    padding-left: max(20px, env(safe-area-inset-left));
+    padding-right: max(20px, env(safe-area-inset-right));
+    padding-bottom: calc(16px + env(safe-area-inset-bottom));
+    position: relative;
+  }
+  .site-footer::before {
+    content: '';
+    position: absolute; inset: 0;
+    background: repeating-linear-gradient(90deg, transparent, transparent 60px, rgba(184,137,42,0.04) 60px, rgba(184,137,42,0.04) 61px);
+    pointer-events: none;
+  }
+  .footer-inner {
+    max-width: 900px;
+    margin: 0 auto;
+    display: flex;
+    flex-direction: column;
+    gap: 20px;
+    position: relative;
+  }
+  .footer-col { min-width: 0; }
+  .footer-title {
+    font-family: 'Palatino Linotype', Palatino, 'Book Antiqua', Georgia, serif;
+    font-size: 1.05rem;
+    font-weight: 700;
+    color: var(--gold2);
+    letter-spacing: -0.3px;
+  }
+  .footer-sub {
+    font-size: 0.7rem;
+    letter-spacing: 2px;
+    text-transform: uppercase;
+    color: rgba(242,234,216,0.45);
+    margin-top: 3px;
+  }
+  .footer-legal {
+    font-size: 0.72rem;
+    line-height: 1.55;
+    color: rgba(242,234,216,0.55);
+  }
+  .footer-credit {
+    font-size: 0.7rem;
+    letter-spacing: 1.5px;
+    text-transform: uppercase;
+    color: rgba(242,234,216,0.45);
+    line-height: 1.5;
+  }
+  .footer-bb {
+    display: inline-block;
+    margin-top: 3px;
+    color: var(--gold2);
+    text-decoration: none;
+    font-family: 'Palatino Linotype', Palatino, 'Book Antiqua', Georgia, serif;
+    font-size: 0.95rem;
+    letter-spacing: 0;
+    text-transform: none;
+    font-weight: 600;
+    border-bottom: 1px solid rgba(184,137,42,0.4);
+  }
+  @media (hover: hover) {
+    .footer-bb:hover { color: var(--gold); border-bottom-color: var(--gold); }
+  }
+  .footer-bb:focus-visible { outline: 2px solid var(--gold); outline-offset: 2px; }
+  .footer-copy {
+    margin-top: 4px;
+    font-size: 0.62rem;
+    color: rgba(242,234,216,0.35);
+    text-transform: none;
+    letter-spacing: 0.5px;
+    font-style: italic;
+  }
+  .footer-bottom {
+    max-width: 900px;
+    margin: 22px auto 0;
+    padding-top: 14px;
+    border-top: 1px solid rgba(242,234,216,0.12);
+    font-size: 0.68rem;
+    color: rgba(242,234,216,0.4);
+    text-align: center;
+    letter-spacing: 1px;
+    position: relative;
+  }
+
+  /* Tablet+ footer layout: three columns */
+  @media (min-width: 600px) {
+    .footer-inner {
+      flex-direction: row;
+      align-items: flex-start;
+      gap: 28px;
+    }
+    .footer-col { flex: 1; }
+    .footer-credit { text-align: right; }
+  }
+
   /* ── TABLET (≥600px): form goes 2-col, header back to row ── */
   @media (min-width: 600px) {
     header { padding: 20px 24px 16px; padding-top: calc(20px + env(safe-area-inset-top)); }
@@ -603,6 +768,12 @@
     }
     .explanation.failed { color: rgba(232,223,200,0.5); }
     .error-bar { background: rgba(139,51,24,0.15); }
+    .fee-disclaimer {
+      background: rgba(184,137,42,0.08);
+      color: rgba(232,223,200,0.78);
+      border-color: rgba(184,137,42,0.3);
+    }
+    .fee-disclaimer strong { color: #e8dfc8; }
   }
 
   /* ── PRINT STYLES ── */
@@ -615,11 +786,21 @@
       font-size: 11pt;
     }
     header, .form-card, .results-actions, .warn-notice, .alt-loading,
-    .new-search-btn, .toast, #empty-state, .warn-notice-retry, noscript {
+    .new-search-btn, .toast, #empty-state, .warn-notice-retry, noscript,
+    .site-footer, .scoring-methodology {
       display: none !important;
     }
     .page { max-width: none; padding: 0; margin: 0; }
     #results-section { display: block !important; }
+    .fee-disclaimer {
+      background: none !important;
+      border: none !important;
+      border-left: 2px solid #000 !important;
+      color: #000 !important;
+      font-size: 9pt;
+      padding: 6px 10px;
+      margin-bottom: 10px;
+    }
     .results-header-row { display: block; border-bottom: 2px solid #000; padding-bottom: 6px; margin-bottom: 12px; }
     .results-header {
       color: #000 !important;
@@ -778,6 +959,9 @@
         <button type="button" class="new-search-btn" id="new-search-btn">↑ New Search</button>
       </div>
     </div>
+    <div class="fee-disclaimer">
+      <strong>Note:</strong> Stud fees shown are 2026 estimates and subject to change. Contact Silver Spurs Breeding to confirm current breeding contracts and availability.
+    </div>
     <div class="info-notice" id="blood-notice" style="display:none;"></div>
     <div class="warn-notice" id="ai-notice" style="display:none;">
       <span><strong>AI narrative unavailable.</strong> Cards show scoring data; reasoning could not be generated.</span>
@@ -789,6 +973,20 @@
       <div class="alt-header">Alternative Matches</div>
       <div class="cards-grid" id="alt-grid" style="display:none;"></div>
     </div>
+
+    <details class="scoring-methodology">
+      <summary>ⓘ How matches are scored</summary>
+      <div class="methodology-body">
+        <p>Each stallion is scored out of 100 based on three factors:</p>
+        <ul>
+          <li><strong>Discipline match — 40 points.</strong> Whether the stallion competes in your mare's discipline.</li>
+          <li><strong>Bloodline compatibility — 30 points.</strong> Known compatibility of your mare's bloodlines with the stallion's, based on Silver Spurs breeding data. Unrecognized bloodlines score neutral (15 pts) rather than penalize.</li>
+          <li><strong>Trait alignment — 30 points.</strong> Overlap between your desired traits and the stallion's proven traits.</li>
+        </ul>
+        <p><strong>Confidence labels:</strong> High (75+) · Good Match (55–74) · Moderate (below 55).</p>
+        <p class="methodology-fine">AI narratives for each match are generated on-demand by Claude using Silver Spurs' 2026 roster data — they are advisory only and do not replace consultation with a Silver Spurs breeding advisor.</p>
+      </div>
+    </details>
   </div>
 
   <div class="empty" id="empty-state">
@@ -797,6 +995,24 @@
   </div>
 
 </div>
+
+<footer class="site-footer">
+  <div class="footer-inner">
+    <div class="footer-col footer-brand">
+      <div class="footer-title">Silver Spurs Breeding</div>
+      <div class="footer-sub">Scottsdale, Arizona · 2026 Roster</div>
+    </div>
+    <div class="footer-col footer-legal">
+      Stud fees subject to change. All bookings subject to Silver Spurs Breeding contract terms. This tool provides advisory matches only and does not constitute a breeding contract.
+    </div>
+    <div class="footer-col footer-credit">
+      <div>An AI tool from</div>
+      <a class="footer-bb" href="https://bridleandbit.com" target="_blank" rel="noopener">Bridle &amp; Bit Magazine</a>
+      <div class="footer-copy">Arizona's Premier Equestrian Publication Since 1978</div>
+    </div>
+  </div>
+  <div class="footer-bottom">© 2026 Silver Spurs Breeding · Matchmaker built by Bridle &amp; Bit Magazine</div>
+</footer>
 
 <div class="toast" id="toast" role="status" aria-live="polite"></div>
 
