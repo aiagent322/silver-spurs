@@ -316,24 +316,6 @@
     align-items: center;
     gap: 10px;
   }
-  .alt-loading {
-    display: flex;
-    align-items: center;
-    gap: 10px;
-    padding: 28px 18px;
-    color: rgba(242,234,216,0.55);
-    font-size: 0.82rem;
-    font-style: italic;
-    justify-content: center;
-  }
-  .alt-spinner {
-    width: 14px; height: 14px;
-    border: 2px solid rgba(242,234,216,0.25);
-    border-top-color: rgba(242,234,216,0.7);
-    border-radius: 50%;
-    animation: altSpin 0.8s linear infinite;
-  }
-  @keyframes altSpin { to { transform: rotate(360deg); } }
 
   .cards-grid {
     display: grid;
@@ -451,7 +433,63 @@
     color: rgba(15,12,7,0.75);
     border-left: 2px solid var(--mist);
     padding-left: 11px;
+    min-height: 1.55em;
   }
+  .explanation.loading {
+    color: transparent;
+    background: linear-gradient(90deg, rgba(15,12,7,0.06) 0%, rgba(15,12,7,0.14) 50%, rgba(15,12,7,0.06) 100%);
+    background-size: 200% 100%;
+    animation: shimmer 1.4s ease-in-out infinite;
+    border-left-color: rgba(15,12,7,0.08);
+    min-height: 2.4em;
+  }
+  .explanation.loading::before {
+    /* Keep a tiny bit of character width so the shimmer area has consistent height */
+    content: '\00a0';
+  }
+  @keyframes shimmer {
+    0%   { background-position:  200% 0; }
+    100% { background-position: -200% 0; }
+  }
+  .explanation.failed {
+    font-style: normal;
+    font-size: 0.78rem;
+    color: rgba(15,12,7,0.45);
+    border-left-color: rgba(15,12,7,0.15);
+  }
+
+  /* Warning-style notice (AI failure). Same pattern as .info-notice but rust accent. */
+  .warn-notice {
+    background: rgba(139,51,24,0.08);
+    border-left: 3px solid var(--rust);
+    color: rgba(15,12,7,0.8);
+    padding: 10px 13px;
+    font-size: 0.8rem;
+    line-height: 1.4;
+    margin-bottom: 14px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 10px;
+    flex-wrap: wrap;
+  }
+  .warn-notice strong { color: var(--ink); }
+  .warn-notice-retry {
+    background: transparent;
+    border: 1px solid var(--rust);
+    color: var(--rust);
+    font-family: 'Menlo', 'Courier New', Courier, monospace;
+    font-size: 0.72rem;
+    letter-spacing: 1.5px;
+    text-transform: uppercase;
+    padding: 6px 11px;
+    cursor: pointer;
+    transition: background 0.12s, color 0.12s;
+  }
+  @media (hover: hover) {
+    .warn-notice-retry:hover { background: var(--rust); color: var(--parch); }
+  }
+  .warn-notice-retry:focus-visible { outline: 2px solid var(--rust); outline-offset: 2px; }
 
   .card-fee {
     background: var(--ink);
@@ -528,6 +566,13 @@
     .trait-chip { background: #241f16; color: #e8dfc8; border-color: rgba(232,223,200,0.2); }
     .info-notice { background: rgba(184,137,42,0.1); color: rgba(232,223,200,0.8); }
     .info-notice strong { color: #e8dfc8; }
+    .warn-notice { background: rgba(139,51,24,0.15); color: rgba(232,223,200,0.85); }
+    .warn-notice strong { color: #e8dfc8; }
+    .warn-notice-retry { color: #e89a7a; border-color: #e89a7a; }
+    .explanation.loading {
+      background: linear-gradient(90deg, rgba(232,223,200,0.05) 0%, rgba(232,223,200,0.12) 50%, rgba(232,223,200,0.05) 100%);
+    }
+    .explanation.failed { color: rgba(232,223,200,0.5); }
     .error-bar { background: rgba(139,51,24,0.15); }
   }
 </style>
@@ -600,14 +645,14 @@
       <button type="button" class="new-search-btn" id="new-search-btn">↑ New Search</button>
     </div>
     <div class="info-notice" id="blood-notice" style="display:none;"></div>
+    <div class="warn-notice" id="ai-notice" style="display:none;">
+      <span><strong>AI narrative unavailable.</strong> Cards show scoring data; reasoning could not be generated.</span>
+      <button type="button" class="warn-notice-retry" id="ai-retry-btn">Retry</button>
+    </div>
     <div class="cards-grid" id="cards-grid"></div>
 
     <div class="alt-section" id="alt-section" style="display:none;">
       <div class="alt-header">Alternative Matches</div>
-      <div class="alt-loading" id="alt-loading">
-        <div class="alt-spinner"></div>
-        <span>Loading alternative matches…</span>
-      </div>
       <div class="cards-grid" id="alt-grid" style="display:none;"></div>
     </div>
   </div>
@@ -936,6 +981,9 @@ document.getElementById('new-search-btn').addEventListener('click', () => {
   document.getElementById('mare-disc').focus({ preventScroll: true });
 });
 
+// Retry just the AI portion if narratives failed
+document.getElementById('ai-retry-btn').addEventListener('click', retryAI);
+
 // ── DETERMINISTIC SCORER ─────────────────────────────────────────────────────
 function scoreStallion(s, mareDisc, mBlood, mTraits) {
   let discPts = 0, bloodPts = 0, traitPts = 0;
@@ -1014,9 +1062,8 @@ function extractJSONArray(raw) {
   return null;
 }
 
-// Shared proxy caller. Returns a string[] of length `expectedLen` or the fallback.
-async function callProxy(prompt, expectedLen, fallbackSentence) {
-  const fb = () => Array(expectedLen).fill(fallbackSentence);
+// Shared proxy caller. Returns string[] of length `expectedLen` on success, null on failure.
+async function callProxy(prompt, expectedLen) {
   try {
     const resp = await fetch(PROXY_URL, {
       method: "POST",
@@ -1027,14 +1074,16 @@ async function callProxy(prompt, expectedLen, fallbackSentence) {
         messages: [{ role: "user", content: prompt }]
       })
     });
-    if (!resp.ok) return fb();
+    if (!resp.ok) return null;
     const data = await resp.json();
     const raw = data?.content?.[0]?.text || '';
     const arr = extractJSONArray(raw);
-    if (!arr || arr.length !== expectedLen) return fb();
-    return arr.map(x => typeof x === 'string' ? x : fallbackSentence);
+    if (!arr || arr.length !== expectedLen) return null;
+    // Ensure every element is a string (model occasionally returns mixed types)
+    if (!arr.every(x => typeof x === 'string')) return null;
+    return arr;
   } catch (e) {
-    return fb();
+    return null;
   }
 }
 
@@ -1058,7 +1107,7 @@ Here ${n===1?'is 1 stallion match':`are ${n} stallion matches`}. Write exactly o
 ${buildMatchList(matches)}
 
 Return ONLY a JSON array of ${n} string${n===1?'':'s'}, one per stallion, in order. No other text.`;
-  return callProxy(prompt, n, 'Strong match based on discipline, bloodline, and trait alignment.');
+  return callProxy(prompt, n);
 }
 
 async function getAltExplanation(mare, matches) {
@@ -1070,7 +1119,7 @@ These are ALTERNATIVE stallion options — the second-best pick in each tier. Wr
 ${buildMatchList(matches)}
 
 Return ONLY a JSON array of ${n} string${n===1?'':'s'}, one per stallion, in order. No other text.`;
-  return callProxy(prompt, n, 'Strong alternative based on bloodline depth and pedigree contrast.');
+  return callProxy(prompt, n);
 }
 
 // ── BUILD CARD ───────────────────────────────────────────────────────────────
@@ -1083,9 +1132,9 @@ function buildCard(s, score, explanation, type, isAlt) {
   const primaryLabel = type==='premium' ? '★ Premium Match'
                      : type==='mid'     ? '✓ Best Value Match'
                      :                    '$ Budget Match';
-  const altLabel = type==='premium' ? '★ Alternative Premium'
-                 : type==='mid'     ? '✓ Alternative Mid-Tier'
-                 :                    '$ Alternative Value';
+  const altLabel = type==='premium' ? '★ Alt Premium'
+                 : type==='mid'     ? '✓ Alt Mid-Tier'
+                 :                    '$ Alt Value';
   const tierLabel = isAlt ? altLabel : primaryLabel;
 
   const card = document.createElement('div');
@@ -1122,8 +1171,26 @@ function buildCard(s, score, explanation, type, isAlt) {
       <span class="fee-amount ${fee.cls}">${fee.text}</span>
     </div>`;
   // AI-returned text goes through textContent, not innerHTML — no injection from model output or mare notes
-  card.querySelector('.explanation').textContent = explanation;
+  const explEl = card.querySelector('.explanation');
+  if (explanation == null) {
+    explEl.classList.add('loading');
+  } else {
+    explEl.textContent = explanation;
+  }
   return card;
+}
+
+// Populate or mark-as-failed an explanation slot on a card that rendered with a loading placeholder
+function setCardExplanation(card, text, failed) {
+  const el = card.querySelector('.explanation');
+  if (!el) return;
+  el.classList.remove('loading');
+  if (failed) {
+    el.classList.add('failed');
+    el.textContent = text || '— AI narrative unavailable —';
+  } else {
+    el.textContent = text;
+  }
 }
 
 function buildEmptySlot(tier, mareDisc) {
@@ -1151,6 +1218,7 @@ function buildEmptySlot(tier, mareDisc) {
 
 // ── MAIN ─────────────────────────────────────────────────────────────────────
 let currentRequestId = 0;
+let lastMatchContext = null; // for AI retry
 
 async function runMatch() {
   const myId = ++currentRequestId;
@@ -1162,8 +1230,8 @@ async function runMatch() {
   const empty = document.getElementById('empty-state');
   const altSection = document.getElementById('alt-section');
   const altGrid = document.getElementById('alt-grid');
-  const altLoading = document.getElementById('alt-loading');
   const bloodNotice = document.getElementById('blood-notice');
+  const aiNotice = document.getElementById('ai-notice');
 
   const mareDisc = document.getElementById('mare-disc').value;
   const mareBloodRaw = document.getElementById('mare-blood').value;
@@ -1174,87 +1242,33 @@ async function runMatch() {
   errBar.style.display = 'none';
   if (!mareDisc) { errBar.textContent = '⚠ Please select a discipline.'; errBar.style.display = 'block'; return; }
 
-  // Loading state — reset both grids
-  btn.disabled = true;
-  btn.innerHTML = '<span class="spinner"></span>Finding matches…';
+  // Reset grids + all notices
   grid.innerHTML = '';
   altGrid.innerHTML = '';
   altGrid.style.display = 'none';
   altSection.style.display = 'none';
-  altLoading.style.display = 'flex';
-  section.style.display = 'none';
   empty.style.display = 'none';
   bloodNotice.style.display = 'none';
+  aiNotice.style.display = 'none';
+  btn.disabled = true;
+  btn.innerHTML = '<span class="spinner"></span>Finding matches…';
 
-  let mare, inDisc;
+  // ─── Score + pick (instant, deterministic) ─────────────────────────────
+  const scored = STALLIONS.map(s => ({ ...s, score: scoreStallion(s, mareDisc, mBlood, selectedTraits) }))
+                           .sort((a,b) => b.score - a.score);
+  const inDisc = scored.filter(s =>
+    (s.discipline||[]).map(d=>d.toLowerCase()).includes(mareDisc.toLowerCase())
+  );
 
-  // ─── PHASE 1: primary matches (fast) ─────────────────────────────────────
-  try {
-    const scored = STALLIONS.map(s => ({ ...s, score: scoreStallion(s, mareDisc, mBlood, selectedTraits) }))
-                             .sort((a,b) => b.score - a.score);
+  const primarySlots = [
+    { tier: 'premium', stallion: inDisc.filter(s=>s.tier==='premium')[0] },
+    { tier: 'mid',     stallion: inDisc.filter(s=>s.tier==='mid')[0]     },
+    { tier: 'value',   stallion: inDisc.filter(s=>s.tier==='value')[0]   }
+  ];
+  const realPicks = primarySlots.filter(s => s.stallion).map(s => s.stallion);
 
-    inDisc = scored.filter(s =>
-      (s.discipline||[]).map(d=>d.toLowerCase()).includes(mareDisc.toLowerCase())
-    );
-
-    // 1st-per-tier = primary picks
-    const premium = inDisc.filter(s=>s.tier==='premium')[0];
-    const mid     = inDisc.filter(s=>s.tier==='mid')[0];
-    const value   = inDisc.filter(s=>s.tier==='value')[0];
-
-    const slots = [
-      { tier: 'premium', stallion: premium },
-      { tier: 'mid',     stallion: mid     },
-      { tier: 'value',   stallion: value   }
-    ];
-    const realPicks = slots.filter(s => s.stallion).map(s => s.stallion);
-
-    if (!realPicks.length) {
-      throw new Error(`No stallions in ${mareDisc} on the 2026 roster.`);
-    }
-
-    mare = { disc: mareDisc, blood: mareBloodRaw, traits: [...selectedTraits].join(', '), notes: mareNotes };
-    const explanations = await getExplanation(mare, realPicks);
-
-    if (myId !== currentRequestId) return; // user clicked again mid-request
-
-    let explIdx = 0;
-    slots.forEach(slot => {
-      if (slot.stallion) {
-        grid.appendChild(buildCard(slot.stallion, slot.stallion.score, explanations[explIdx] || '—', slot.tier, false));
-        explIdx++;
-      } else {
-        grid.appendChild(buildEmptySlot(slot.tier, mareDisc));
-      }
-    });
-
-    document.getElementById('results-header').textContent =
-      `Top Matches — ${mareDisc.charAt(0).toUpperCase()+mareDisc.slice(1)} Mare`;
-    section.style.display = 'block';
-
-    // Scroll results into view (helps on mobile where results are below the form)
-    requestAnimationFrame(() => {
-      section.scrollIntoView({ behavior: 'smooth', block: 'start' });
-    });
-
-    // Show inline notice if user typed bloodlines but none are in our database.
-    // Known = appears as a COMPAT key OR in any stallion's bloodlines list.
-    if (mBlood.length > 0) {
-      const knownKeys = new Set(Object.keys(COMPAT));
-      STALLIONS.forEach(st => (st.bloodlines||[]).forEach(b => knownKeys.add(b.toLowerCase())));
-      const recognized = mBlood.filter(b => knownKeys.has(b));
-      if (recognized.length === 0) {
-        bloodNotice.innerHTML =
-          `<strong>Note:</strong> The bloodline${mBlood.length>1?'s':''} you entered ` +
-          `(${mBlood.map(b=>b.replace(/\b\w/g,c=>c.toUpperCase())).join(', ')}) ` +
-          `${mBlood.length>1?'are':'is'} not in our breeding-compatibility database. ` +
-          `Scores below reflect discipline and trait alignment only.`;
-        bloodNotice.style.display = 'block';
-      }
-    }
-
-  } catch (err) {
-    errBar.textContent = '⚠ ' + (err.message || 'Error running match. Try again.');
+  if (!realPicks.length) {
+    errBar.textContent = `⚠ No stallions in ${mareDisc} on the 2026 roster.`;
     errBar.style.display = 'block';
     empty.style.display = 'block';
     btn.disabled = false;
@@ -1262,52 +1276,151 @@ async function runMatch() {
     return;
   }
 
-  // Release the button as soon as primaries are visible
-  btn.disabled = false;
-  btn.innerHTML = 'Find My Top Matches';
+  // ─── RENDER PRIMARY CARDS IMMEDIATELY (skeleton: real data + loading explanation) ───
+  const primaryCardRefs = []; // same order as realPicks, for later explanation population
+  primarySlots.forEach(slot => {
+    if (slot.stallion) {
+      const card = buildCard(slot.stallion, slot.stallion.score, null, slot.tier, false);
+      grid.appendChild(card);
+      primaryCardRefs.push(card);
+    } else {
+      grid.appendChild(buildEmptySlot(slot.tier, mareDisc));
+    }
+  });
 
-  // ─── PHASE 2: alternative matches (slower, background) ───────────────────
-  // 2nd-per-tier = alternative picks
-  const altPremium = inDisc.filter(s=>s.tier==='premium')[1];
-  const altMid     = inDisc.filter(s=>s.tier==='mid')[1];
-  const altValue   = inDisc.filter(s=>s.tier==='value')[1];
+  document.getElementById('results-header').textContent =
+    `Top Matches — ${mareDisc.charAt(0).toUpperCase()+mareDisc.slice(1)} Mare`;
+  section.style.display = 'block';
 
+  // Scroll into view
+  requestAnimationFrame(() => {
+    section.scrollIntoView({ behavior: 'smooth', block: 'start' });
+  });
+
+  // Bloodline-not-recognized notice
+  if (mBlood.length > 0) {
+    const knownKeys = new Set(Object.keys(COMPAT));
+    STALLIONS.forEach(st => (st.bloodlines||[]).forEach(b => knownKeys.add(b.toLowerCase())));
+    if (mBlood.filter(b => knownKeys.has(b)).length === 0) {
+      bloodNotice.innerHTML =
+        `<strong>Note:</strong> The bloodline${mBlood.length>1?'s':''} you entered ` +
+        `(${mBlood.map(b=>b.replace(/\b\w/g,c=>c.toUpperCase())).join(', ')}) ` +
+        `${mBlood.length>1?'are':'is'} not in our breeding-compatibility database. ` +
+        `Scores below reflect discipline and trait alignment only.`;
+      bloodNotice.style.display = 'block';
+    }
+  }
+
+  // Build mare context for AI calls
+  const mare = { disc: mareDisc, blood: mareBloodRaw, traits: [...selectedTraits].join(', '), notes: mareNotes };
+
+  // Determine alt picks up front so retry logic can re-fire both phases if needed
   const altSlots = [
-    { tier: 'premium', stallion: altPremium },
-    { tier: 'mid',     stallion: altMid     },
-    { tier: 'value',   stallion: altValue   }
+    { tier: 'premium', stallion: inDisc.filter(s=>s.tier==='premium')[1] },
+    { tier: 'mid',     stallion: inDisc.filter(s=>s.tier==='mid')[1]     },
+    { tier: 'value',   stallion: inDisc.filter(s=>s.tier==='value')[1]   }
   ];
   const altReal = altSlots.filter(s => s.stallion).map(s => s.stallion);
 
-  // If there are zero real alternatives, don't show the section at all
-  if (!altReal.length) {
-    altSection.style.display = 'none';
-    return;
+  // Save context so the retry button can re-run the AI portion only
+  lastMatchContext = { myId, mare, primaryCardRefs, realPicks, altSlots, altReal };
+
+  // ─── PHASE 1: primary AI narratives ─────────────────────────────────────
+  const explanations = await getExplanation(mare, realPicks);
+  if (myId !== currentRequestId) return; // stale — user clicked again
+
+  if (explanations) {
+    primaryCardRefs.forEach((card, i) => setCardExplanation(card, explanations[i]));
+  } else {
+    primaryCardRefs.forEach(card => setCardExplanation(card, null, true));
+    aiNotice.style.display = 'flex';
   }
+
+  // Release button as soon as primary phase finishes
+  btn.disabled = false;
+  btn.innerHTML = 'Find My Top Matches';
+
+  // ─── PHASE 2: alternative matches (background) ───────────────────────────
+  if (!altReal.length) return; // no alternatives to load
 
   altSection.style.display = 'block';
+  altGrid.style.display = 'grid';
 
-  try {
-    const altExplanations = await getAltExplanation(mare, altReal);
+  // Render alt cards with loading explanations
+  const altCardRefs = [];
+  altSlots.forEach(slot => {
+    if (slot.stallion) {
+      const card = buildCard(slot.stallion, slot.stallion.score, null, slot.tier, true);
+      altGrid.appendChild(card);
+      altCardRefs.push(card);
+    } else {
+      altGrid.appendChild(buildEmptySlot(slot.tier, mareDisc));
+    }
+  });
+  lastMatchContext.altCardRefs = altCardRefs;
 
-    if (myId !== currentRequestId) return; // stale
+  const altExplanations = await getAltExplanation(mare, altReal);
+  if (myId !== currentRequestId) return;
 
-    let ei = 0;
-    altSlots.forEach(slot => {
-      if (slot.stallion) {
-        altGrid.appendChild(buildCard(slot.stallion, slot.stallion.score, altExplanations[ei] || '—', slot.tier, true));
-        ei++;
-      } else {
-        altGrid.appendChild(buildEmptySlot(slot.tier, mareDisc));
-      }
-    });
-
-    altLoading.style.display = 'none';
-    altGrid.style.display = 'grid';
-  } catch (err) {
-    if (myId !== currentRequestId) return;
-    altLoading.innerHTML = '<span style="color:rgba(242,234,216,0.55);font-style:italic;">Alternative matches unavailable.</span>';
+  if (altExplanations) {
+    altCardRefs.forEach((card, i) => setCardExplanation(card, altExplanations[i]));
+  } else {
+    altCardRefs.forEach(card => setCardExplanation(card, null, true));
+    // Only show notice if not already shown from phase 1
+    if (aiNotice.style.display === 'none') aiNotice.style.display = 'flex';
   }
+}
+
+// AI retry: re-run only the AI portion of the last match without re-scoring
+async function retryAI() {
+  const ctx = lastMatchContext;
+  if (!ctx || ctx.myId !== currentRequestId) return;
+  const aiNotice = document.getElementById('ai-notice');
+  const retryBtn = document.getElementById('ai-retry-btn');
+  retryBtn.disabled = true;
+  retryBtn.textContent = 'Retrying…';
+
+  // Reset failed explanations back to loading state
+  ctx.primaryCardRefs.forEach(c => {
+    const el = c.querySelector('.explanation');
+    el.classList.remove('failed');
+    el.classList.add('loading');
+    el.textContent = '';
+  });
+  if (ctx.altCardRefs) {
+    ctx.altCardRefs.forEach(c => {
+      const el = c.querySelector('.explanation');
+      el.classList.remove('failed');
+      el.classList.add('loading');
+      el.textContent = '';
+    });
+  }
+
+  const primaryResult = await getExplanation(ctx.mare, ctx.realPicks);
+  if (ctx.myId !== currentRequestId) return;
+
+  if (primaryResult) {
+    ctx.primaryCardRefs.forEach((card, i) => setCardExplanation(card, primaryResult[i]));
+  } else {
+    ctx.primaryCardRefs.forEach(card => setCardExplanation(card, null, true));
+  }
+
+  let altResult = null;
+  if (ctx.altReal.length && ctx.altCardRefs) {
+    altResult = await getAltExplanation(ctx.mare, ctx.altReal);
+    if (ctx.myId !== currentRequestId) return;
+    if (altResult) {
+      ctx.altCardRefs.forEach((card, i) => setCardExplanation(card, altResult[i]));
+    } else {
+      ctx.altCardRefs.forEach(card => setCardExplanation(card, null, true));
+    }
+  }
+
+  // Hide notice only if both phases succeeded
+  const bothOk = primaryResult && (!ctx.altReal.length || altResult);
+  if (bothOk) aiNotice.style.display = 'none';
+  retryBtn.disabled = false;
+  retryBtn.textContent = 'Retry';
 }
 </script>
 </body>
