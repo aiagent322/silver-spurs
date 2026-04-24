@@ -170,14 +170,19 @@
     display: inline-flex;
     align-items: center;
     border: 1px solid rgba(15,12,7,0.25);
+    border-radius: 0;
     background: var(--parch);
+    color: var(--ink);
     cursor: pointer;
     transition: background 0.1s, color 0.1s, border-color 0.1s;
     user-select: none;
+    -webkit-appearance: none;
+    appearance: none;
   }
-  .trait-chip.on { background: var(--ink); color: var(--gold2); border-color: var(--ink); }
+  .trait-chip[aria-pressed="true"] { background: var(--ink); color: var(--gold2); border-color: var(--ink); }
+  .trait-chip:focus-visible { outline: 2px solid var(--gold); outline-offset: 2px; }
   @media (hover: hover) {
-    .trait-chip:hover:not(.on) { border-color: var(--gold); color: var(--gold); }
+    .trait-chip:hover[aria-pressed="false"] { border-color: var(--gold); color: var(--gold); }
   }
 
   /* ── RUN BUTTON ── */
@@ -234,6 +239,16 @@
   .info-notice strong { color: var(--ink); }
 
   /* ── RESULTS ── */
+  .results-header-row {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 14px;
+    margin-bottom: 14px;
+    padding-bottom: 8px;
+    border-bottom: var(--rule);
+    flex-wrap: wrap;
+  }
   .results-header {
     font-family: 'Palatino Linotype', Palatino, 'Book Antiqua', Georgia, serif;
     font-size: 0.78rem;
@@ -241,10 +256,23 @@
     letter-spacing: 3px;
     text-transform: uppercase;
     color: var(--mist);
-    margin-bottom: 14px;
-    padding-bottom: 8px;
-    border-bottom: var(--rule);
   }
+  .new-search-btn {
+    background: transparent;
+    color: rgba(242,234,216,0.6);
+    border: 1px solid rgba(242,234,216,0.3);
+    font-family: 'Menlo', 'Courier New', Courier, monospace;
+    font-size: 0.7rem;
+    letter-spacing: 2px;
+    text-transform: uppercase;
+    padding: 7px 12px;
+    cursor: pointer;
+    transition: color 0.15s, border-color 0.15s;
+  }
+  @media (hover: hover) {
+    .new-search-btn:hover { color: var(--gold2); border-color: var(--gold); }
+  }
+  .new-search-btn:focus-visible { outline: 2px solid var(--gold); outline-offset: 2px; }
   .alt-section { margin-top: 28px; }
   .alt-header {
     font-family: 'Palatino Linotype', Palatino, 'Book Antiqua', Georgia, serif;
@@ -297,6 +325,8 @@
   @keyframes riseIn { from { opacity:0; transform:translateY(10px); } to { opacity:1; transform:translateY(0); } }
 
   .match-card.empty-slot { background: #efe8d2; }
+  .match-card.is-alt { opacity: 0.95; }
+  .match-card.is-alt .card-tier-bar { filter: saturate(0.7) brightness(0.96); }
   .empty-slot-body {
     padding: 28px 18px;
     flex: 1;
@@ -443,6 +473,35 @@
     .cards-grid { grid-template-columns: repeat(3, 1fr); }
     .score-num { font-size: 3rem; }
   }
+
+  /* ── DARK MODE (opt-in via OS setting) ── */
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --parch:  #1c1812;  /* deep leather bg */
+      --parch2: #2a2419;  /* aged cordovan card bg */
+    }
+    body { color: #e8dfc8; }
+    .stallion-name, .form-title, .fee-amount, .brand-name,
+    .empty-slot-title, .score-num { color: #e8dfc8; }
+    .score-num.premium { color: var(--gold2); }
+    .score-num.mid     { color: #7fc87a; }
+    .score-num.value   { color: #b89468; }
+    .stat-item { color: rgba(232,223,200,0.72); }
+    .stat-item strong { color: #e8dfc8; }
+    .explanation { color: rgba(232,223,200,0.78); border-left-color: rgba(232,223,200,0.3); }
+    .stallion-disc { color: rgba(232,223,200,0.5); }
+    .empty-slot-body { color: #9a8e72; }
+    .empty-slot-text { color: #9a8e72; }
+    .match-card.empty-slot { background: #241f16; }
+    select, input[type="text"], textarea {
+      background: #241f16; color: #e8dfc8;
+      border-color: rgba(232,223,200,0.2);
+    }
+    .trait-chip { background: #241f16; color: #e8dfc8; border-color: rgba(232,223,200,0.2); }
+    .info-notice { background: rgba(184,137,42,0.1); color: rgba(232,223,200,0.8); }
+    .info-notice strong { color: #e8dfc8; }
+    .error-bar { background: rgba(139,51,24,0.15); }
+  }
 </style>
 </head>
 <body>
@@ -451,7 +510,7 @@
   <div class="header-inner">
     <div class="brand">
       <div class="brand-name">Silver Spurs Breeding Matchmaker</div>
-      <div class="brand-sub">Scottsdale, AZ · 2026 Roster · 26 Stallions</div>
+      <div class="brand-sub">Scottsdale, AZ · 2026 Roster · <span id="stallion-count">—</span> Stallions</div>
     </div>
     <div class="header-badge">AI Scoring</div>
   </div>
@@ -462,10 +521,10 @@
   <!-- MARE FORM -->
   <div class="form-card">
     <div class="form-title">Mare Profile</div>
-    <div class="form-grid">
+    <form class="form-grid" id="mare-form" novalidate>
 
       <div class="form-group">
-        <label class="form-label">Discipline</label>
+        <label class="form-label" for="mare-disc">Discipline</label>
         <select id="mare-disc">
           <option value="">— Select —</option>
           <option value="reining">Reining</option>
@@ -475,30 +534,36 @@
       </div>
 
       <div class="form-group">
-        <label class="form-label">Mare Sire / Key Bloodlines</label>
+        <label class="form-label" for="mare-blood">Mare Sire / Key Bloodlines</label>
         <input type="text" id="mare-blood" placeholder="e.g. Shining Spark, Nu Chex To Cash" autocapitalize="words" autocomplete="off" autocorrect="off" spellcheck="false">
       </div>
 
       <div class="form-group full">
-        <label class="form-label">Desired Traits — select all that apply</label>
-        <div class="trait-chips" id="trait-chips"></div>
+        <span class="form-label" id="traits-label">Desired Traits — select all that apply</span>
+        <div class="trait-chips" id="trait-chips" role="group" aria-labelledby="traits-label"></div>
       </div>
 
       <div class="form-group full">
-        <label class="form-label">Additional Notes (optional)</label>
-        <textarea id="mare-notes" placeholder="e.g. mare is small-framed, needs size; prefers cow horse outcross"></textarea>
+        <label class="form-label" for="mare-notes">Additional Notes (optional)</label>
+        <textarea id="mare-notes" maxlength="500" placeholder="e.g. mare is small-framed, needs size; prefers cow horse outcross"></textarea>
       </div>
 
-    </div>
-    <div class="run-wrap">
-      <div class="error-bar" id="error-bar"></div>
-      <button class="run-btn" id="run-btn" onclick="runMatch()">Find My Top Matches</button>
-    </div>
+      <div class="form-group full">
+        <div class="run-wrap">
+          <div class="error-bar" id="error-bar" role="alert"></div>
+          <button class="run-btn" id="run-btn" type="submit">Find My Top Matches</button>
+        </div>
+      </div>
+
+    </form>
   </div>
 
   <!-- RESULTS -->
   <div id="results-section" style="display:none;">
-    <div class="results-header" id="results-header">Results</div>
+    <div class="results-header-row">
+      <div class="results-header" id="results-header">Results</div>
+      <button type="button" class="new-search-btn" id="new-search-btn">↑ New Search</button>
+    </div>
     <div class="info-notice" id="blood-notice" style="display:none;"></div>
     <div class="cards-grid" id="cards-grid"></div>
 
@@ -788,16 +853,52 @@ const COMPAT = {
   "katie gun":              ["one gun","grays starlight","peppy san badger"],
 };
 
+// Auto-symmetrize COMPAT: any A→B relationship is mirrored to B→A so scoring is consistent
+// regardless of how the data is entered.
+(() => {
+  const additions = {};
+  for (const [a, partners] of Object.entries(COMPAT)) {
+    for (const b of partners) {
+      if (!COMPAT[b]) additions[b] = additions[b] || [];
+      const target = COMPAT[b] || additions[b];
+      if (!target.includes(a)) target.push(a);
+    }
+  }
+  Object.assign(COMPAT, additions);
+})();
+
 const TRAITS = ['stop','athleticism','cow sense','handle','softness','speed','power','scope','rate','turn','versatility','quick feet'];
 let selectedTraits = new Set();
 
-// Render trait chips
+// Render trait chips (buttons with aria-pressed for keyboard/screen-reader support)
 const chipWrap = document.getElementById('trait-chips');
 TRAITS.forEach(t => {
-  const c = document.createElement('span');
-  c.className = 'trait-chip'; c.textContent = t;
-  c.onclick = () => { selectedTraits.has(t) ? (selectedTraits.delete(t), c.classList.remove('on')) : (selectedTraits.add(t), c.classList.add('on')); };
+  const c = document.createElement('button');
+  c.type = 'button';
+  c.className = 'trait-chip';
+  c.textContent = t;
+  c.setAttribute('aria-pressed', 'false');
+  c.addEventListener('click', () => {
+    const isOn = selectedTraits.has(t);
+    if (isOn) { selectedTraits.delete(t); c.setAttribute('aria-pressed','false'); }
+    else      { selectedTraits.add(t);    c.setAttribute('aria-pressed','true');  }
+  });
   chipWrap.appendChild(c);
+});
+
+// Form submit handler: Enter anywhere in the form triggers runMatch
+document.getElementById('mare-form').addEventListener('submit', (e) => {
+  e.preventDefault();
+  runMatch();
+});
+
+// Set dynamic stallion count in header
+document.getElementById('stallion-count').textContent = STALLIONS.length;
+
+// "New Search" button jumps back to the top of the form
+document.getElementById('new-search-btn').addEventListener('click', () => {
+  document.getElementById('mare-form').scrollIntoView({ behavior: 'smooth', block: 'start' });
+  document.getElementById('mare-disc').focus({ preventScroll: true });
 });
 
 // ── DETERMINISTIC SCORER ─────────────────────────────────────────────────────
@@ -815,9 +916,9 @@ function scoreStallion(s, mareDisc, mBlood, mTraits) {
     if (mBlood.includes(sb)) { conflict++; return; }
     const sbC = COMPAT[sb]||[];
     mBlood.forEach(mb => {
-      if (sbC.includes(mb)) compat++;
       const mc = COMPAT[mb]||[];
-      if (mc.includes(sb)) compat++;
+      // Count each (sb, mb) pair once, regardless of direction in COMPAT map
+      if (sbC.includes(mb) || mc.includes(sb)) compat++;
     });
   });
   compat = Math.min(compat, sBlood.length + mBlood.length);
@@ -855,80 +956,109 @@ function fmtEarnings(s) {
 }
 
 // ── CLAUDE API EXPLANATION ───────────────────────────────────────────────────
-async function getExplanation(mare, matches) {
+const PROXY_URL = "https://stallion-matchmaker-proxy.bridleandbit.workers.dev/";
+
+// Robust extractor: handles code fences, prose-wrapped arrays, or plain JSON.
+function extractJSONArray(raw) {
+  if (!raw) return null;
+  // Strip code fences
+  let clean = raw.replace(/```json|```/g, '').trim();
+  try {
+    const p = JSON.parse(clean);
+    if (Array.isArray(p)) return p;
+  } catch (e) {}
+  // Fallback: find the outermost [ ... ] anywhere in the response
+  const first = raw.indexOf('[');
+  const last  = raw.lastIndexOf(']');
+  if (first >= 0 && last > first) {
+    try {
+      const p = JSON.parse(raw.slice(first, last + 1));
+      if (Array.isArray(p)) return p;
+    } catch (e) {}
+  }
+  return null;
+}
+
+// Shared proxy caller. Returns a string[] of length `expectedLen` or the fallback.
+async function callProxy(prompt, expectedLen, fallbackSentence) {
+  const fb = () => Array(expectedLen).fill(fallbackSentence);
+  try {
+    const resp = await fetch(PROXY_URL, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        model: "claude-sonnet-4-20250514",
+        max_tokens: 400,
+        messages: [{ role: "user", content: prompt }]
+      })
+    });
+    if (!resp.ok) return fb();
+    const data = await resp.json();
+    const raw = data?.content?.[0]?.text || '';
+    const arr = extractJSONArray(raw);
+    if (!arr || arr.length !== expectedLen) return fb();
+    return arr.map(x => typeof x === 'string' ? x : fallbackSentence);
+  } catch (e) {
+    return fb();
+  }
+}
+
+function buildMareContext(mare) {
   const notesLine = mare.notes && mare.notes.trim()
     ? `\nAdditional notes about this mare: ${mare.notes.trim()}`
     : '';
+  return `A breeder has a ${mare.disc} mare with bloodlines: ${mare.blood||'unknown'}. Desired traits: ${mare.traits||'none specified'}.${notesLine}`;
+}
+
+function buildMatchList(matches) {
+  return matches.map((m,i)=>`${i+1}. ${m.name} (${m.tier} tier, score ${m.score}): bloodlines=${m.bloodlines.join(', ')}; traits=${m.traits.join(', ')}; ${m.performance_summary}`).join('\n');
+}
+
+async function getExplanation(mare, matches) {
   const n = matches.length;
-  const prompt = `You are a horse breeding advisor. A breeder has a ${mare.disc} mare with bloodlines: ${mare.blood||'unknown'}. Desired traits: ${mare.traits||'none specified'}.${notesLine}
+  const prompt = `You are a horse breeding advisor. ${buildMareContext(mare)}
 
 Here ${n===1?'is 1 stallion match':`are ${n} stallion matches`}. Write exactly one sentence of explanation for each (why it's the right fit for THIS mare). Be specific — mention bloodlines, traits, or the mare's notes where relevant. Be direct, no fluff.
 
-${matches.map((m,i)=>`${i+1}. ${m.name} (${m.tier} tier, score ${m.score}): bloodlines=${m.bloodlines.join(', ')}; traits=${m.traits.join(', ')}; ${m.performance_summary}`).join('\n')}
+${buildMatchList(matches)}
 
 Return ONLY a JSON array of ${n} string${n===1?'':'s'}, one per stallion, in order. No other text.`;
-
-  const resp = await fetch("https://stallion-matchmaker-proxy.bridleandbit.workers.dev/", {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({
-      model: "claude-sonnet-4-20250514",
-      max_tokens: 400,
-      messages: [{ role: "user", content: prompt }]
-    })
-  });
-  const data = await resp.json();
-  const raw = data.content?.[0]?.text || '[]';
-  try {
-    const clean = raw.replace(/```json|```/g,'').trim();
-    return JSON.parse(clean);
-  } catch { return matches.map(()=>'Strong match based on discipline, bloodline, and trait alignment.'); }
+  return callProxy(prompt, n, 'Strong match based on discipline, bloodline, and trait alignment.');
 }
 
-// Alternates: second-tier picks. Prompt frames them as distinct-angle options.
 async function getAltExplanation(mare, matches) {
-  const notesLine = mare.notes && mare.notes.trim()
-    ? `\nAdditional notes about this mare: ${mare.notes.trim()}`
-    : '';
   const n = matches.length;
-  const prompt = `You are a horse breeding advisor. A breeder has a ${mare.disc} mare with bloodlines: ${mare.blood||'unknown'}. Desired traits: ${mare.traits||'none specified'}.${notesLine}
+  const prompt = `You are a horse breeding advisor. ${buildMareContext(mare)}
 
 These are ALTERNATIVE stallion options — the second-best pick in each tier. Write exactly one sentence per stallion framing why this breeder might consider this alternative over the top pick in the same tier (different strength, different angle, different bloodline outcross). Be specific and direct — no fluff, no repeating the top pick's pitch.
 
-${matches.map((m,i)=>`${i+1}. ${m.name} (${m.tier} tier, score ${m.score}): bloodlines=${m.bloodlines.join(', ')}; traits=${m.traits.join(', ')}; ${m.performance_summary}`).join('\n')}
+${buildMatchList(matches)}
 
 Return ONLY a JSON array of ${n} string${n===1?'':'s'}, one per stallion, in order. No other text.`;
-
-  const resp = await fetch("https://stallion-matchmaker-proxy.bridleandbit.workers.dev/", {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({
-      model: "claude-sonnet-4-20250514",
-      max_tokens: 400,
-      messages: [{ role: "user", content: prompt }]
-    })
-  });
-  const data = await resp.json();
-  const raw = data.content?.[0]?.text || '[]';
-  try {
-    const clean = raw.replace(/```json|```/g,'').trim();
-    return JSON.parse(clean);
-  } catch { return matches.map(()=>'Strong alternative based on bloodline depth and pedigree contrast.'); }
+  return callProxy(prompt, n, 'Strong alternative based on bloodline depth and pedigree contrast.');
 }
 
 // ── BUILD CARD ───────────────────────────────────────────────────────────────
-function buildCard(s, score, explanation, type) {
+function buildCard(s, score, explanation, type, isAlt) {
   const conf = confidenceLabel(score);
   const fee = fmtFee(s.stud_fee);
   const earnings = fmtEarnings(s);
   const disc = (s.discipline||[]).join(' / ');
 
+  const primaryLabel = type==='premium' ? '★ Premium Match'
+                     : type==='mid'     ? '✓ Best Value Match'
+                     :                    '$ Budget Match';
+  const altLabel = type==='premium' ? '★ Alternative Premium'
+                 : type==='mid'     ? '✓ Alternative Mid-Tier'
+                 :                    '$ Alternative Value';
+  const tierLabel = isAlt ? altLabel : primaryLabel;
+
   const card = document.createElement('div');
-  card.className = 'match-card';
+  card.className = 'match-card' + (isAlt ? ' is-alt' : '');
   card.innerHTML = `
     <div class="card-tier-bar ${type}">
       <div class="tier-dot"></div>
-      ${ type==='premium' ? '★ Premium Match' : type==='mid' ? '✓ Best Value Match' : '$ Budget Match' }
+      ${tierLabel}
     </div>
     <div class="card-body">
       <div>
@@ -1056,7 +1186,7 @@ async function runMatch() {
     let explIdx = 0;
     slots.forEach(slot => {
       if (slot.stallion) {
-        grid.appendChild(buildCard(slot.stallion, slot.stallion.score, explanations[explIdx] || '—', slot.tier));
+        grid.appendChild(buildCard(slot.stallion, slot.stallion.score, explanations[explIdx] || '—', slot.tier, false));
         explIdx++;
       } else {
         grid.appendChild(buildEmptySlot(slot.tier, mareDisc));
@@ -1066,6 +1196,11 @@ async function runMatch() {
     document.getElementById('results-header').textContent =
       `Top Matches — ${mareDisc.charAt(0).toUpperCase()+mareDisc.slice(1)} Mare`;
     section.style.display = 'block';
+
+    // Scroll results into view (helps on mobile where results are below the form)
+    requestAnimationFrame(() => {
+      section.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    });
 
     // Show inline notice if user typed bloodlines but none are in our database.
     // Known = appears as a COMPAT key OR in any stallion's bloodlines list.
@@ -1125,7 +1260,7 @@ async function runMatch() {
     let ei = 0;
     altSlots.forEach(slot => {
       if (slot.stallion) {
-        altGrid.appendChild(buildCard(slot.stallion, slot.stallion.score, altExplanations[ei] || '—', slot.tier));
+        altGrid.appendChild(buildCard(slot.stallion, slot.stallion.score, altExplanations[ei] || '—', slot.tier, true));
         ei++;
       } else {
         altGrid.appendChild(buildEmptySlot(slot.tier, mareDisc));
