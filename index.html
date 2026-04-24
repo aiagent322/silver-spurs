@@ -193,6 +193,39 @@
     padding-bottom: 8px;
     border-bottom: var(--rule);
   }
+  .alt-section { margin-top: 28px; }
+  .alt-header {
+    font-family: 'Palatino Linotype', Palatino, 'Book Antiqua', Georgia, serif;
+    font-size: 0.68rem;
+    font-weight: 500;
+    letter-spacing: 3px;
+    text-transform: uppercase;
+    color: rgba(242,234,216,0.7);
+    margin-bottom: 12px;
+    padding-bottom: 7px;
+    border-bottom: 1px solid rgba(242,234,216,0.2);
+    display: flex;
+    align-items: center;
+    gap: 10px;
+  }
+  .alt-loading {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 28px 18px;
+    color: rgba(242,234,216,0.55);
+    font-size: 0.8rem;
+    font-style: italic;
+    justify-content: center;
+  }
+  .alt-spinner {
+    width: 14px; height: 14px;
+    border: 2px solid rgba(242,234,216,0.25);
+    border-top-color: rgba(242,234,216,0.7);
+    border-radius: 50%;
+    animation: altSpin 0.8s linear infinite;
+  }
+  @keyframes altSpin { to { transform: rotate(360deg); } }
 
   .cards-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 14px; }
   @media (max-width: 680px) { .cards-grid { grid-template-columns: 1fr; } }
@@ -381,6 +414,15 @@
   <div id="results-section" style="display:none;">
     <div class="results-header" id="results-header">Results</div>
     <div class="cards-grid" id="cards-grid"></div>
+
+    <div class="alt-section" id="alt-section" style="display:none;">
+      <div class="alt-header">Alternative Matches</div>
+      <div class="alt-loading" id="alt-loading">
+        <div class="alt-spinner"></div>
+        <span>Loading alternative matches…</span>
+      </div>
+      <div class="cards-grid" id="alt-grid" style="display:none;"></div>
+    </div>
   </div>
 
   <div class="empty" id="empty-state">
@@ -751,6 +793,37 @@ Return ONLY a JSON array of ${n} string${n===1?'':'s'}, one per stallion, in ord
   } catch { return matches.map(()=>'Strong match based on discipline, bloodline, and trait alignment.'); }
 }
 
+// Alternates: second-tier picks. Prompt frames them as distinct-angle options.
+async function getAltExplanation(mare, matches) {
+  const notesLine = mare.notes && mare.notes.trim()
+    ? `\nAdditional notes about this mare: ${mare.notes.trim()}`
+    : '';
+  const n = matches.length;
+  const prompt = `You are a horse breeding advisor. A breeder has a ${mare.disc} mare with bloodlines: ${mare.blood||'unknown'}. Desired traits: ${mare.traits||'none specified'}.${notesLine}
+
+These are ALTERNATIVE stallion options — the second-best pick in each tier. Write exactly one sentence per stallion framing why this breeder might consider this alternative over the top pick in the same tier (different strength, different angle, different bloodline outcross). Be specific and direct — no fluff, no repeating the top pick's pitch.
+
+${matches.map((m,i)=>`${i+1}. ${m.name} (${m.tier} tier, score ${m.score}): bloodlines=${m.bloodlines.join(', ')}; traits=${m.traits.join(', ')}; ${m.performance_summary}`).join('\n')}
+
+Return ONLY a JSON array of ${n} string${n===1?'':'s'}, one per stallion, in order. No other text.`;
+
+  const resp = await fetch("https://stallion-matchmaker-proxy.bridleandbit.workers.dev/", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({
+      model: "claude-sonnet-4-20250514",
+      max_tokens: 400,
+      messages: [{ role: "user", content: prompt }]
+    })
+  });
+  const data = await resp.json();
+  const raw = data.content?.[0]?.text || '[]';
+  try {
+    const clean = raw.replace(/```json|```/g,'').trim();
+    return JSON.parse(clean);
+  } catch { return matches.map(()=>'Strong alternative based on bloodline depth and pedigree contrast.'); }
+}
+
 // ── BUILD CARD ───────────────────────────────────────────────────────────────
 function buildCard(s, score, explanation, type) {
   const conf = confidenceLabel(score);
@@ -818,12 +891,19 @@ function buildEmptySlot(tier, mareDisc) {
 }
 
 // ── MAIN ─────────────────────────────────────────────────────────────────────
+let currentRequestId = 0;
+
 async function runMatch() {
+  const myId = ++currentRequestId;
+
   const btn = document.getElementById('run-btn');
   const errBar = document.getElementById('error-bar');
   const grid = document.getElementById('cards-grid');
   const section = document.getElementById('results-section');
   const empty = document.getElementById('empty-state');
+  const altSection = document.getElementById('alt-section');
+  const altGrid = document.getElementById('alt-grid');
+  const altLoading = document.getElementById('alt-loading');
 
   const mareDisc = document.getElementById('mare-disc').value;
   const mareBloodRaw = document.getElementById('mare-blood').value;
@@ -834,24 +914,29 @@ async function runMatch() {
   errBar.style.display = 'none';
   if (!mareDisc) { errBar.textContent = '⚠ Please select a discipline.'; errBar.style.display = 'block'; return; }
 
-  // Loading state
+  // Loading state — reset both grids
   btn.disabled = true;
   btn.innerHTML = '<span class="spinner"></span>Finding matches…';
   grid.innerHTML = '';
+  altGrid.innerHTML = '';
+  altGrid.style.display = 'none';
+  altSection.style.display = 'none';
+  altLoading.style.display = 'flex';
   section.style.display = 'none';
   empty.style.display = 'none';
 
+  let mare, inDisc;
+
+  // ─── PHASE 1: primary matches (fast) ─────────────────────────────────────
   try {
-    // Score all
     const scored = STALLIONS.map(s => ({ ...s, score: scoreStallion(s, mareDisc, mBlood, selectedTraits) }))
                              .sort((a,b) => b.score - a.score);
 
-    // Hard filter: only stallions whose discipline actually matches the mare
-    const inDisc = scored.filter(s =>
+    inDisc = scored.filter(s =>
       (s.discipline||[]).map(d=>d.toLowerCase()).includes(mareDisc.toLowerCase())
     );
 
-    // Pick best per tier from the in-discipline pool (may be undefined)
+    // 1st-per-tier = primary picks
     const premium = inDisc.filter(s=>s.tier==='premium')[0];
     const mid     = inDisc.filter(s=>s.tier==='mid')[0];
     const value   = inDisc.filter(s=>s.tier==='value')[0];
@@ -861,22 +946,21 @@ async function runMatch() {
       { tier: 'mid',     stallion: mid     },
       { tier: 'value',   stallion: value   }
     ];
-    const realPicks = slots.filter(slot => slot.stallion).map(slot => slot.stallion);
+    const realPicks = slots.filter(s => s.stallion).map(s => s.stallion);
 
     if (!realPicks.length) {
       throw new Error(`No stallions in ${mareDisc} on the 2026 roster.`);
     }
 
-    // Get AI explanations (for real picks only)
-    const mare = { disc: mareDisc, blood: mareBloodRaw, traits: [...selectedTraits].join(', '), notes: mareNotes };
+    mare = { disc: mareDisc, blood: mareBloodRaw, traits: [...selectedTraits].join(', '), notes: mareNotes };
     const explanations = await getExplanation(mare, realPicks);
 
-    // Render: real cards or empty-slot card per tier
+    if (myId !== currentRequestId) return; // user clicked again mid-request
+
     let explIdx = 0;
     slots.forEach(slot => {
       if (slot.stallion) {
-        const card = buildCard(slot.stallion, slot.stallion.score, explanations[explIdx] || '—', slot.tier);
-        grid.appendChild(card);
+        grid.appendChild(buildCard(slot.stallion, slot.stallion.score, explanations[explIdx] || '—', slot.tier));
         explIdx++;
       } else {
         grid.appendChild(buildEmptySlot(slot.tier, mareDisc));
@@ -891,9 +975,56 @@ async function runMatch() {
     errBar.textContent = '⚠ ' + (err.message || 'Error running match. Try again.');
     errBar.style.display = 'block';
     empty.style.display = 'block';
-  } finally {
     btn.disabled = false;
     btn.innerHTML = 'Find My Top Matches';
+    return;
+  }
+
+  // Release the button as soon as primaries are visible
+  btn.disabled = false;
+  btn.innerHTML = 'Find My Top Matches';
+
+  // ─── PHASE 2: alternative matches (slower, background) ───────────────────
+  // 2nd-per-tier = alternative picks
+  const altPremium = inDisc.filter(s=>s.tier==='premium')[1];
+  const altMid     = inDisc.filter(s=>s.tier==='mid')[1];
+  const altValue   = inDisc.filter(s=>s.tier==='value')[1];
+
+  const altSlots = [
+    { tier: 'premium', stallion: altPremium },
+    { tier: 'mid',     stallion: altMid     },
+    { tier: 'value',   stallion: altValue   }
+  ];
+  const altReal = altSlots.filter(s => s.stallion).map(s => s.stallion);
+
+  // If there are zero real alternatives, don't show the section at all
+  if (!altReal.length) {
+    altSection.style.display = 'none';
+    return;
+  }
+
+  altSection.style.display = 'block';
+
+  try {
+    const altExplanations = await getAltExplanation(mare, altReal);
+
+    if (myId !== currentRequestId) return; // stale
+
+    let ei = 0;
+    altSlots.forEach(slot => {
+      if (slot.stallion) {
+        altGrid.appendChild(buildCard(slot.stallion, slot.stallion.score, altExplanations[ei] || '—', slot.tier));
+        ei++;
+      } else {
+        altGrid.appendChild(buildEmptySlot(slot.tier, mareDisc));
+      }
+    });
+
+    altLoading.style.display = 'none';
+    altGrid.style.display = 'grid';
+  } catch (err) {
+    if (myId !== currentRequestId) return;
+    altLoading.innerHTML = '<span style="color:rgba(242,234,216,0.55);font-style:italic;">Alternative matches unavailable.</span>';
   }
 }
 </script>
