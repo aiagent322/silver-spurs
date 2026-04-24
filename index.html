@@ -722,13 +722,17 @@ function fmtEarnings(s, disc) {
 
 // ── CLAUDE API EXPLANATION ───────────────────────────────────────────────────
 async function getExplanation(mare, matches) {
-  const prompt = `You are a horse breeding advisor. A breeder has a ${mare.disc} mare with bloodlines: ${mare.blood||'unknown'}. Desired traits: ${mare.traits||'none specified'}.
+  const notesLine = mare.notes && mare.notes.trim()
+    ? `\nAdditional notes about this mare: ${mare.notes.trim()}`
+    : '';
+  const n = matches.length;
+  const prompt = `You are a horse breeding advisor. A breeder has a ${mare.disc} mare with bloodlines: ${mare.blood||'unknown'}. Desired traits: ${mare.traits||'none specified'}.${notesLine}
 
-Here are 3 stallion matches. Write exactly one sentence of explanation for each (why it's the right fit for THIS mare). Be specific — mention bloodlines or traits. Be direct, no fluff.
+Here ${n===1?'is 1 stallion match':`are ${n} stallion matches`}. Write exactly one sentence of explanation for each (why it's the right fit for THIS mare). Be specific — mention bloodlines, traits, or the mare's notes where relevant. Be direct, no fluff.
 
 ${matches.map((m,i)=>`${i+1}. ${m.name} (${m.tier} tier, score ${m.score}): bloodlines=${m.bloodlines.join(', ')}; traits=${m.traits.join(', ')}; ${m.performance_summary}`).join('\n')}
 
-Return ONLY a JSON array of 3 strings, one per stallion, in order. No other text.`;
+Return ONLY a JSON array of ${n} string${n===1?'':'s'}, one per stallion, in order. No other text.`;
 
   const resp = await fetch("https://stallion-matchmaker-proxy.bridleandbit.workers.dev/", {
     method: "POST",
