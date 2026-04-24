@@ -208,6 +208,34 @@
   .match-card:nth-child(3) { animation-delay: 0.16s; }
   @keyframes riseIn { from { opacity:0; transform:translateY(10px); } to { opacity:1; transform:translateY(0); } }
 
+  .match-card.empty-slot { background: #efe8d2; }
+  .empty-slot-body {
+    padding: 28px 18px;
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    text-align: center;
+    gap: 10px;
+    color: #7a6d54;
+  }
+  .empty-slot-icon {
+    font-size: 1.4rem;
+    opacity: 0.5;
+  }
+  .empty-slot-title {
+    font-family: Georgia, serif;
+    font-size: 0.95rem;
+    font-weight: 600;
+    color: #5c5038;
+  }
+  .empty-slot-text {
+    font-size: 0.78rem;
+    line-height: 1.5;
+    max-width: 180px;
+  }
+
   .card-tier-bar {
     padding: 7px 14px 6px;
     font-size: 0.56rem;
@@ -763,6 +791,29 @@ function buildCard(s, score, explanation, type) {
   return card;
 }
 
+function buildEmptySlot(tier, mareDisc) {
+  const label = tier === 'premium' ? 'Premium Match'
+             : tier === 'mid'     ? 'Best Value Match'
+             :                      'Budget Match';
+  const tierWord = tier === 'premium' ? 'premium'
+                : tier === 'mid'     ? 'mid-tier'
+                :                      'value-tier';
+  const icon = tier === 'premium' ? '★' : tier === 'mid' ? '✓' : '$';
+  const card = document.createElement('div');
+  card.className = 'match-card empty-slot';
+  card.innerHTML = `
+    <div class="card-tier-bar ${tier}">
+      <div class="tier-dot"></div>
+      ${icon} ${label}
+    </div>
+    <div class="empty-slot-body">
+      <div class="empty-slot-icon">—</div>
+      <div class="empty-slot-title">No Match Available</div>
+      <div class="empty-slot-text">No ${tierWord} stallion in <strong>${mareDisc}</strong> on the 2026 roster.</div>
+    </div>`;
+  return card;
+}
+
 // ── MAIN ─────────────────────────────────────────────────────────────────────
 async function runMatch() {
   const btn = document.getElementById('run-btn');
@@ -792,23 +843,41 @@ async function runMatch() {
     const scored = STALLIONS.map(s => ({ ...s, score: scoreStallion(s, mareDisc, mBlood, selectedTraits) }))
                              .sort((a,b) => b.score - a.score);
 
-    // Pick best per tier
-    const premium = scored.filter(s=>s.tier==='premium')[0];
-    const mid     = scored.filter(s=>s.tier==='mid')[0];
-    const value   = scored.filter(s=>s.tier==='value')[0];
+    // Hard filter: only stallions whose discipline actually matches the mare
+    const inDisc = scored.filter(s =>
+      (s.discipline||[]).map(d=>d.toLowerCase()).includes(mareDisc.toLowerCase())
+    );
 
-    const picks = [premium, mid, value].filter(Boolean);
-    if (!picks.length) throw new Error('No matches found.');
+    // Pick best per tier from the in-discipline pool (may be undefined)
+    const premium = inDisc.filter(s=>s.tier==='premium')[0];
+    const mid     = inDisc.filter(s=>s.tier==='mid')[0];
+    const value   = inDisc.filter(s=>s.tier==='value')[0];
 
-    // Get AI explanations
+    const slots = [
+      { tier: 'premium', stallion: premium },
+      { tier: 'mid',     stallion: mid     },
+      { tier: 'value',   stallion: value   }
+    ];
+    const realPicks = slots.filter(slot => slot.stallion).map(slot => slot.stallion);
+
+    if (!realPicks.length) {
+      throw new Error(`No stallions in ${mareDisc} on the 2026 roster.`);
+    }
+
+    // Get AI explanations (for real picks only)
     const mare = { disc: mareDisc, blood: mareBloodRaw, traits: [...selectedTraits].join(', '), notes: mareNotes };
-    const explanations = await getExplanation(mare, picks);
+    const explanations = await getExplanation(mare, realPicks);
 
-    // Render
-    const types = ['premium','mid','value'];
-    picks.forEach((s, i) => {
-      const card = buildCard(s, s.score, explanations[i] || '—', types[i]);
-      grid.appendChild(card);
+    // Render: real cards or empty-slot card per tier
+    let explIdx = 0;
+    slots.forEach(slot => {
+      if (slot.stallion) {
+        const card = buildCard(slot.stallion, slot.stallion.score, explanations[explIdx] || '—', slot.tier);
+        grid.appendChild(card);
+        explIdx++;
+      } else {
+        grid.appendChild(buildEmptySlot(slot.tier, mareDisc));
+      }
     });
 
     document.getElementById('results-header').textContent =
