@@ -297,10 +297,39 @@
     cursor: pointer;
     transition: color 0.15s, border-color 0.15s;
   }
+  .results-actions {
+    display: flex;
+    gap: 8px;
+    flex-wrap: wrap;
+  }
   @media (hover: hover) {
     .new-search-btn:hover { color: var(--gold2); border-color: var(--gold); }
   }
   .new-search-btn:focus-visible { outline: 2px solid var(--gold); outline-offset: 2px; }
+  .new-search-btn:disabled { opacity: 0.4; cursor: default; }
+
+  /* Toast for clipboard-fallback confirmation */
+  .toast {
+    position: fixed;
+    bottom: 24px;
+    left: 50%;
+    transform: translateX(-50%);
+    background: var(--ink);
+    color: var(--gold2);
+    border: 1px solid var(--gold);
+    font-family: 'Menlo', 'Courier New', Courier, monospace;
+    font-size: 0.82rem;
+    letter-spacing: 1.5px;
+    padding: 11px 18px;
+    z-index: 1000;
+    opacity: 0;
+    pointer-events: none;
+    transition: opacity 0.22s, transform 0.22s;
+    transform: translate(-50%, 12px);
+    max-width: calc(100% - 40px);
+    text-align: center;
+  }
+  .toast.show { opacity: 1; transform: translate(-50%, 0); }
   .alt-section { margin-top: 28px; }
   .alt-header {
     font-family: 'Palatino Linotype', Palatino, 'Book Antiqua', Georgia, serif;
@@ -575,6 +604,107 @@
     .explanation.failed { color: rgba(232,223,200,0.5); }
     .error-bar { background: rgba(139,51,24,0.15); }
   }
+
+  /* ── PRINT STYLES ── */
+  @media print {
+    @page { margin: 0.5in; }
+    body {
+      background: #fff !important;
+      background-image: none !important;
+      color: #000 !important;
+      font-size: 11pt;
+    }
+    header, .form-card, .results-actions, .warn-notice, .alt-loading,
+    .new-search-btn, .toast, #empty-state, .warn-notice-retry, noscript {
+      display: none !important;
+    }
+    .page { max-width: none; padding: 0; margin: 0; }
+    #results-section { display: block !important; }
+    .results-header-row { display: block; border-bottom: 2px solid #000; padding-bottom: 6px; margin-bottom: 12px; }
+    .results-header {
+      color: #000 !important;
+      font-size: 14pt;
+      margin: 0;
+    }
+    .results-header::before {
+      display: block;
+      content: 'Silver Spurs Breeding Matchmaker';
+      font-size: 18pt;
+      font-weight: 700;
+      color: #000;
+      margin-bottom: 2px;
+      letter-spacing: 0;
+      text-transform: none;
+    }
+    .results-header::after {
+      display: block;
+      content: attr(data-print-date);
+      font-size: 9pt;
+      color: #555;
+      margin-top: 2px;
+      letter-spacing: 0;
+      text-transform: none;
+    }
+    .alt-section { margin-top: 20px; page-break-before: auto; }
+    .alt-header {
+      color: #000 !important;
+      border-bottom-color: #000 !important;
+      font-size: 11pt;
+    }
+    .cards-grid {
+      grid-template-columns: 1fr !important;
+      gap: 10px;
+    }
+    .match-card {
+      page-break-inside: avoid;
+      break-inside: avoid;
+      border: 1px solid #000 !important;
+      background: #fff !important;
+      animation: none !important;
+    }
+    .match-card.empty-slot { display: none; }
+    .match-card.is-alt { opacity: 1; }
+    .match-card.is-alt .card-tier-bar { filter: none; }
+    .card-tier-bar {
+      background: #000 !important;
+      color: #fff !important;
+      border-bottom: none;
+      padding: 5px 10px 4px;
+      font-size: 9pt;
+    }
+    .card-tier-bar.mid,
+    .card-tier-bar.value { background: #333 !important; color: #fff !important; }
+    .score-num { color: #000 !important; }
+    .stat-item, .explanation { color: #000 !important; }
+    .explanation { font-size: 10pt; line-height: 1.45; border-left-color: #666 !important; }
+    .explanation.loading { background: none !important; animation: none; }
+    .explanation.loading::before { content: ''; }
+    .explanation.failed { color: #666 !important; }
+    .stallion-name { color: #000 !important; }
+    .stallion-disc { color: #444 !important; }
+    .confidence-pill { border-color: #000 !important; color: #000 !important; }
+    .score-bar-wrap { display: none; }
+    .card-fee {
+      background: #fff !important;
+      color: #000 !important;
+      border-top: 1px solid #000;
+    }
+    .fee-label { color: #000 !important; opacity: 0.75; }
+    .fee-amount { color: #000 !important; }
+    .info-notice { border-left-color: #000 !important; color: #000 !important; background: none !important; }
+    .blood-notice strong, .info-notice strong { color: #000 !important; }
+    /* Print footer on last page */
+    #results-section::after {
+      display: block;
+      content: 'Printed from silver-spurs.pages.dev · Silver Spurs Breeding, Scottsdale AZ · 2026 Roster · Stud fees subject to change.';
+      margin-top: 24px;
+      padding-top: 10px;
+      border-top: 1px solid #999;
+      font-size: 8pt;
+      color: #666;
+      text-align: center;
+    }
+  }
 </style>
 </head>
 <body>
@@ -642,7 +772,11 @@
   <div id="results-section" style="display:none;">
     <div class="results-header-row">
       <div class="results-header" id="results-header">Results</div>
-      <button type="button" class="new-search-btn" id="new-search-btn">↑ New Search</button>
+      <div class="results-actions">
+        <button type="button" class="new-search-btn" id="share-btn">↗ Share</button>
+        <button type="button" class="new-search-btn" id="print-btn">⎙ Print</button>
+        <button type="button" class="new-search-btn" id="new-search-btn">↑ New Search</button>
+      </div>
     </div>
     <div class="info-notice" id="blood-notice" style="display:none;"></div>
     <div class="warn-notice" id="ai-notice" style="display:none;">
@@ -663,6 +797,8 @@
   </div>
 
 </div>
+
+<div class="toast" id="toast" role="status" aria-live="polite"></div>
 
 <script>
 // ── STALLION DATA ─────────────────────────────────────────────────────────────
@@ -984,6 +1120,73 @@ document.getElementById('new-search-btn').addEventListener('click', () => {
 // Retry just the AI portion if narratives failed
 document.getElementById('ai-retry-btn').addEventListener('click', retryAI);
 
+// ── SHARE & PRINT ────────────────────────────────────────────────────────────
+function buildShareText() {
+  const ctx = lastMatchContext;
+  if (!ctx) return '';
+  const m = ctx.mare;
+  const lines = ['Silver Spurs Breeding Matchmaker — Results', ''];
+  lines.push(`Mare: ${m.disc} ${m.blood ? `(${m.blood})` : ''}`.trim());
+  if (m.traits) lines.push(`Desired traits: ${m.traits}`);
+  lines.push('');
+
+  const tierIcon = t => t==='premium'?'★':t==='mid'?'✓':'$';
+  const tierLabel = t => t==='premium'?'Premium':t==='mid'?'Mid':'Value';
+
+  if (ctx.realPicks.length) {
+    lines.push('TOP MATCHES:');
+    ctx.realPicks.forEach(s => {
+      lines.push(`${tierIcon(s.tier)} ${tierLabel(s.tier)}: ${s.name} — ${s.score}/100 — $${s.stud_fee.toLocaleString()}`);
+    });
+  }
+  if (ctx.altReal.length) {
+    lines.push('');
+    lines.push('ALTERNATIVES:');
+    ctx.altReal.forEach(s => {
+      lines.push(`${tierIcon(s.tier)} Alt ${tierLabel(s.tier)}: ${s.name} — ${s.score}/100 — $${s.stud_fee.toLocaleString()}`);
+    });
+  }
+  lines.push('');
+  lines.push('https://silver-spurs.pages.dev');
+  return lines.join('\n');
+}
+
+function showToast(msg, ms = 2200) {
+  const t = document.getElementById('toast');
+  t.textContent = msg;
+  t.classList.add('show');
+  clearTimeout(showToast._h);
+  showToast._h = setTimeout(() => t.classList.remove('show'), ms);
+}
+
+document.getElementById('share-btn').addEventListener('click', async () => {
+  const text = buildShareText();
+  if (!text) return;
+  const shareData = {
+    title: 'Silver Spurs Breeding Matchmaker',
+    text: text
+  };
+  if (navigator.share) {
+    try {
+      await navigator.share(shareData);
+    } catch (e) {
+      // User cancelled — silent
+    }
+    return;
+  }
+  // Fallback: copy to clipboard
+  try {
+    await navigator.clipboard.writeText(text);
+    showToast('Results copied to clipboard');
+  } catch (e) {
+    showToast('Share unavailable in this browser');
+  }
+});
+
+document.getElementById('print-btn').addEventListener('click', () => {
+  window.print();
+});
+
 // ── DETERMINISTIC SCORER ─────────────────────────────────────────────────────
 function scoreStallion(s, mareDisc, mBlood, mTraits) {
   let discPts = 0, bloodPts = 0, traitPts = 0;
@@ -1288,8 +1491,9 @@ async function runMatch() {
     }
   });
 
-  document.getElementById('results-header').textContent =
-    `Top Matches — ${mareDisc.charAt(0).toUpperCase()+mareDisc.slice(1)} Mare`;
+  const resultsHeader = document.getElementById('results-header');
+  resultsHeader.textContent = `Top Matches — ${mareDisc.charAt(0).toUpperCase()+mareDisc.slice(1)} Mare`;
+  resultsHeader.setAttribute('data-print-date', new Date().toLocaleDateString(undefined, { year:'numeric', month:'long', day:'numeric' }));
   section.style.display = 'block';
 
   // Scroll into view
@@ -1314,7 +1518,7 @@ async function runMatch() {
   // Build mare context for AI calls
   const mare = { disc: mareDisc, blood: mareBloodRaw, traits: [...selectedTraits].join(', '), notes: mareNotes };
 
-  // Determine alt picks up front so retry logic can re-fire both phases if needed
+  // Determine alt picks
   const altSlots = [
     { tier: 'premium', stallion: inDisc.filter(s=>s.tier==='premium')[1] },
     { tier: 'mid',     stallion: inDisc.filter(s=>s.tier==='mid')[1]     },
@@ -1322,8 +1526,24 @@ async function runMatch() {
   ];
   const altReal = altSlots.filter(s => s.stallion).map(s => s.stallion);
 
+  // ─── RENDER ALT CARDS IMMEDIATELY TOO (if any), so the full result view is visible at once ───
+  const altCardRefs = [];
+  if (altReal.length) {
+    altSection.style.display = 'block';
+    altGrid.style.display = 'grid';
+    altSlots.forEach(slot => {
+      if (slot.stallion) {
+        const card = buildCard(slot.stallion, slot.stallion.score, null, slot.tier, true);
+        altGrid.appendChild(card);
+        altCardRefs.push(card);
+      } else {
+        altGrid.appendChild(buildEmptySlot(slot.tier, mareDisc));
+      }
+    });
+  }
+
   // Save context so the retry button can re-run the AI portion only
-  lastMatchContext = { myId, mare, primaryCardRefs, realPicks, altSlots, altReal };
+  lastMatchContext = { myId, mare, primaryCardRefs, realPicks, altSlots, altReal, altCardRefs };
 
   // ─── PHASE 1: primary AI narratives ─────────────────────────────────────
   const explanations = await getExplanation(mare, realPicks);
@@ -1340,24 +1560,8 @@ async function runMatch() {
   btn.disabled = false;
   btn.innerHTML = 'Find My Top Matches';
 
-  // ─── PHASE 2: alternative matches (background) ───────────────────────────
-  if (!altReal.length) return; // no alternatives to load
-
-  altSection.style.display = 'block';
-  altGrid.style.display = 'grid';
-
-  // Render alt cards with loading explanations
-  const altCardRefs = [];
-  altSlots.forEach(slot => {
-    if (slot.stallion) {
-      const card = buildCard(slot.stallion, slot.stallion.score, null, slot.tier, true);
-      altGrid.appendChild(card);
-      altCardRefs.push(card);
-    } else {
-      altGrid.appendChild(buildEmptySlot(slot.tier, mareDisc));
-    }
-  });
-  lastMatchContext.altCardRefs = altCardRefs;
+  // ─── PHASE 2: alternative AI narratives (cards already rendered) ────────
+  if (!altReal.length) return;
 
   const altExplanations = await getAltExplanation(mare, altReal);
   if (myId !== currentRequestId) return;
@@ -1366,7 +1570,6 @@ async function runMatch() {
     altCardRefs.forEach((card, i) => setCardExplanation(card, altExplanations[i]));
   } else {
     altCardRefs.forEach(card => setCardExplanation(card, null, true));
-    // Only show notice if not already shown from phase 1
     if (aiNotice.style.display === 'none') aiNotice.style.display = 'flex';
   }
 }
