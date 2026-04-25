@@ -1726,6 +1726,7 @@ async function runMatch() {
   resultsHeader.textContent = `Top Matches — ${mareDisc.charAt(0).toUpperCase()+mareDisc.slice(1)} Mare`;
   resultsHeader.setAttribute('data-print-date', new Date().toLocaleDateString(undefined, { year:'numeric', month:'long', day:'numeric' }));
   section.style.display = 'block';
+  btn.innerHTML = '<span class="spinner"></span>Loading narratives…';
 
   // Scroll into view
   requestAnimationFrame(() => {
