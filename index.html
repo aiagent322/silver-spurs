@@ -776,7 +776,17 @@
     .fee-disclaimer strong { color: #e8dfc8; }
   }
 
-  /* ── PRINT STYLES ── */
+  .low-relevance-flag {
+    margin-left: auto;
+    font-size: 0.62rem;
+    letter-spacing: 1.5px;
+    text-transform: uppercase;
+    padding: 2px 7px;
+    border: 1px solid currentColor;
+    opacity: 0.7;
+  }
+
+
   @media print {
     @page { margin: 0.5in; }
     body {
@@ -1573,10 +1583,14 @@ function buildCard(s, score, explanation, type, isAlt) {
 
   const card = document.createElement('div');
   card.className = 'match-card' + (isAlt ? ' is-alt' : '');
+  const lowRelevanceBadge = (score < 45)
+    ? '<span class="low-relevance-flag" title="Score below 45 indicates limited compatibility on this mare\'s criteria">Low Relevance</span>'
+    : '';
   card.innerHTML = `
     <div class="card-tier-bar ${type}">
       <div class="tier-dot"></div>
       ${tierLabel}
+      ${lowRelevanceBadge}
     </div>
     <div class="card-body">
       <div>
