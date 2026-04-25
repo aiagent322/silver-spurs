@@ -1367,6 +1367,21 @@ function buildShareText() {
   return lines.join('\n');
 }
 
+// Build a shareable URL encoding the current mare form state
+function buildShareURL() {
+  const disc   = document.getElementById('mare-disc').value;
+  const blood  = document.getElementById('mare-blood').value.trim();
+  const traits = [...selectedTraits].join(',');
+  const notes  = document.getElementById('mare-notes').value.trim();
+  if (!disc) return null;
+  const p = new URLSearchParams();
+  p.set('disc', disc);
+  if (blood)  p.set('blood',  blood);
+  if (traits) p.set('traits', traits);
+  if (notes)  p.set('notes',  notes);
+  return window.location.origin + window.location.pathname + '?' + p.toString();
+}
+
 function showToast(msg, ms = 2200) {
   const t = document.getElementById('toast');
   t.textContent = msg;
@@ -1376,24 +1391,24 @@ function showToast(msg, ms = 2200) {
 }
 
 document.getElementById('share-btn').addEventListener('click', async () => {
-  const text = buildShareText();
-  if (!text) return;
-  const shareData = {
-    title: 'Silver Spurs Breeding Matchmaker',
-    text: text
-  };
+  const url = buildShareURL();
+  if (!url) { showToast('Select a discipline first'); return; }
   if (navigator.share) {
     try {
-      await navigator.share(shareData);
+      await navigator.share({
+        title: 'Silver Spurs Breeding Matchmaker',
+        text: buildShareText(),
+        url: url
+      });
     } catch (e) {
       // User cancelled — silent
     }
     return;
   }
-  // Fallback: copy to clipboard
+  // Fallback: copy URL to clipboard
   try {
-    await navigator.clipboard.writeText(text);
-    showToast('Results copied to clipboard');
+    await navigator.clipboard.writeText(url);
+    showToast('Link copied — paste to share your mare\'s results');
   } catch (e) {
     showToast('Share unavailable in this browser');
   }
@@ -1790,6 +1805,45 @@ async function runMatch() {
   }
 }
 
+// ── URL → FORM HYDRATION (fix #17) ──────────────────────────────────────────
+// On load, read ?disc=&blood=&traits=&notes= and populate + auto-run.
+function initFromURL() {
+  const p = new URLSearchParams(window.location.search);
+  const disc   = p.get('disc')   || '';
+  const blood  = p.get('blood')  || '';
+  const traits = p.get('traits') || '';
+  const notes  = p.get('notes')  || '';
+
+  if (!disc) return; // nothing to restore
+
+  // Discipline
+  const discEl = document.getElementById('mare-disc');
+  // Find the matching option (case-insensitive)
+  const opt = [...discEl.options].find(o => o.value.toLowerCase() === disc.toLowerCase());
+  if (opt) discEl.value = opt.value;
+
+  // Bloodlines
+  if (blood) document.getElementById('mare-blood').value = blood;
+
+  // Notes
+  if (notes) document.getElementById('mare-notes').value = notes;
+
+  // Traits — activate chips whose label matches
+  if (traits) {
+    const wantedTraits = new Set(traits.split(',').map(t => t.trim().toLowerCase()).filter(Boolean));
+    document.querySelectorAll('.trait-chip').forEach(chip => {
+      const t = chip.textContent.trim().toLowerCase();
+      if (wantedTraits.has(t)) {
+        selectedTraits.add(chip.textContent.trim()); // keep original case to match TRAITS array
+        chip.setAttribute('aria-pressed', 'true');
+      }
+    });
+  }
+
+  // Auto-run after the browser has painted the populated form
+  requestAnimationFrame(() => runMatch());
+}
+
 // AI retry: re-run only the AI portion of the last match without re-scoring
 async function retryAI() {
   const ctx = lastMatchContext;
@@ -1841,6 +1895,8 @@ async function retryAI() {
   retryBtn.disabled = false;
   retryBtn.textContent = 'Retry';
 }
+
+initFromURL();
 </script>
 </body>
 </html>
